@@ -3,6 +3,9 @@ Functional Programming Assignment 2
 
 This program is the Web Application written in Functional Programming Language Haskell using Happstack web frame. The web service display the JSON data from the URL, it is able to save JSON data to the file and produces the HTML output.
 
+How I've build my program?
+I began to write my application with making basic HTML forms. I then started to input and process that data on the web page. Then I have started to write some functions to get the JSON data from the URL and save this data to a file and created more forms to trigger those functions.
+
 Modules Installed:
 * cabal
 * happstack
