@@ -119,7 +119,7 @@ fileWrite =
 writingToFile :: String -> IO String
 writingToFile saveToString = do
 	writeFile "temperature.json" (show saveToString)
-	return "Written to a file: temp.json"
+	return "Written to a file: temperature.json"
 
 getJson :: IO L.ByteString
 getJson = C.simpleHttp "http://www.phoric.eu/temperature.json"
