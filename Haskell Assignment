@@ -1,0 +1,129 @@
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+import Control.Monad    (msum)
+import Happstack.Server
+    ( Response, ServerPart, Method(POST)
+    , BodyPolicy(..), decodeBody, defaultBodyPolicy
+    , dir, look, nullConf, ok, simpleHTTP
+    , toResponse, methodM, Method(GET)
+    )
+
+import GHC.Generics
+import Data.Aeson
+import Control.Applicative
+import System.IO.Unsafe
+import Network.HTTP.Conduit as C (simpleHttp)
+import qualified Data.ByteString.Lazy as L
+import qualified Network.HTTP		  as N (getResponseBody
+						,getRequest) 
+import Text.Blaze                         as B
+import Text.Blaze.Html4.Strict            as B hiding (map)
+import Text.Blaze.Html4.Strict.Attributes as B hiding ( dir, label, title)
+import Data.Maybe (fromJust)
+
+data Temperature  = Temperature {
+				date :: String
+				, temperature :: Int
+			} deriving (Show, Generic)
+
+data Temperatures = Temperatures {
+			temperatures :: [Temperature]
+			} deriving (Show, Generic)
+
+instance FromJSON Temperature
+instance FromJSON Temperatures
+
+testTemps = Temperatures [Temperature "Today" 0, Temperature "Tomorrow" 100]
+
+main :: IO ()
+main = simpleHTTP nullConf $ handler
+
+myPolicy :: BodyPolicy
+myPolicy = (defaultBodyPolicy "/tmp/" 0 1000 1000)
+
+handler :: ServerPart Response
+handler =
+    do decodeBody myPolicy
+       msum [ dir "town" $ tempDisplay
+	    , dir "date" $ showAllJson
+	    , dir "writer" $ fileWrite
+            , mainPage]
+
+--TEMPERATURE FORM-----------------------------------------------
+mainPage :: ServerPart Response
+mainPage = ok $ toResponse $
+    html $ do
+      B.head $ do
+        title "Functional Programming, Assignment 2"
+
+      B.body $ do	 
+	h1 "CI285 Introduction to Functional Programming, Assignment 2"
+	h3 "Temperature in..." 
+
+        form ! enctype "multipart/form-data"
+             ! B.method "POST"
+             ! action "/town" $ do
+              B.label "Town: " >> input ! type_ "text"
+                                        ! name "Town"
+                                        ! size "10"
+              B.label "Date: " >> input ! type_ "text"
+                                        ! name "Date"
+                                        ! size "10"
+              input ! type_ "submit"
+                    ! name "upload"
+
+--ALL TEMPERATURE FORM--------------------------------------
+	h3 "Show all JSON temeratures" 
+        form! enctype "multipart/form-data"
+             ! B.method "POST"
+             ! action "/date" $ do
+              B.label "All Temperatures: "         
+              input ! type_ "submit"
+                    ! name "upload"
+
+--SAVE TO FILE FORM----------------------------------------------
+	h3 "Save JSON temperatures to a file..." 		
+        form! enctype "multipart/form-data"
+             ! B.method "POST"
+             ! action "/writer" $ do
+              B.label "Click to save "         
+              input ! type_ "submit"
+                    ! name "upload"
+
+--TEMPERATURE PART RESPONSE-------------------------------------
+tempDisplay :: ServerPart Response
+tempDisplay =
+    do methodM POST
+       town <- look "Town"
+       date <- look "Date"
+       ok $ toResponse $ html $ do
+	B.head $ do
+		h2 $ toHtml $ ("Temperature in " ++ town ++ " on " ++ date ++ " was 12C'") 
+
+--SHOW ALL JSON TEMPERATURES FROM URL----------------------------
+showAllJson :: ServerPart Response
+showAllJson =
+    do methodM POST
+       ok $ toResponse $ html $ do
+	B.head $ do
+		p $ toHtml $ show $ unsafePerformIO $ saveToString
+
+--WRITE DATA TO A FILE---------------------------------------------
+fileWrite :: ServerPart Response
+fileWrite =
+    do methodM POST
+       ok $ toResponse $ html $ do
+	B.head $ do
+		p $ toHtml $ show $ unsafePerformIO $ writingToFile $ show $ unsafePerformIO $  saveToString
+
+--WRITE STRING TO A  FILE-------------------------------------
+writingToFile :: String -> IO String
+writingToFile saveToString = do
+	writeFile "temperature.json" (show saveToString)
+	return "Written to a file: temp.json"
+
+getJson :: IO L.ByteString
+getJson = C.simpleHttp "http://www.phoric.eu/temperature.json"
+
+--SAVE URL TO STRING---------------------------------------------
+saveToString :: IO Temperatures
+saveToString = fmap (fromJust . decode) getJson
